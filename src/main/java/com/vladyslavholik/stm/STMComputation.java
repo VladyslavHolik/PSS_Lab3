@@ -24,11 +24,11 @@ public class STMComputation {
 
         for (int numberOfJobs = 50; numberOfJobs < 1000; numberOfJobs += 50) {
             Connection connection = DBUtil.initialize();
-            ExecutorService executor = Executors.newFixedThreadPool(4);
+            ExecutorService executor = Executors.newFixedThreadPool(2);
 
             List<Product> products = getProducts();
             List<Callable<Long>> jobs = new ArrayList<>();
-            for (int i = 1; i <= 50; i++) {
+            for (int i = 1; i <= numberOfJobs; i++) {
                 jobs.add(() -> updateSoldItems(products, connection));
             }
 
@@ -42,7 +42,8 @@ public class STMComputation {
             }
 
             watch.stop();
-
+            connection.close();
+            executor.shutdown();
             log.info(String.format("Number of jobs: %s, time taken to execute all: %s, average time for one job: %s", numberOfJobs, watch.getTime(), calculateAverage(metrics)));
         }
     }
@@ -57,6 +58,7 @@ public class STMComputation {
 
     private static Long updateSoldItems(List<Product> products, Connection connection) {
         var watch = new StopWatch();
+        watch.start();
 
         StmUtils.atomic(() -> {
             for (Product product : products) {
@@ -73,7 +75,7 @@ public class STMComputation {
             product.getSoldItems().increment();
             PreparedStatement preparedStatement = connection.prepareStatement("UPDATE Products SET soldItems = ? WHERE id = ?");
             preparedStatement.setInt(1, product.getSoldItems().get());
-            preparedStatement.setInt(1, product.getId());
+            preparedStatement.setInt(2, product.getId());
             preparedStatement.executeUpdate();
         } catch (SQLException e) {
             throw new RuntimeException(e);
